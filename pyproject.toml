@@ -1,0 +1,24 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "robo-forex"
+version = "1.0.0"
+description = "Robôs de trading: análise de oferta/demanda + order block e execução de alta frequência"
+readme = "README.md"
+requires-python = ">=3.10"
+license = { text = "MIT" }
+dependencies = []
+
+[project.optional-dependencies]
+# O núcleo roda só com a biblioteca padrão. Estes são extras opcionais:
+yaml = ["pyyaml>=6.0"]          # configuração em YAML (JSON funciona sem isso)
+mt5 = ["MetaTrader5>=5.0.45"]   # adaptador MetaTrader 5 do robô HFT (Windows)
+
+[project.scripts]
+robo-forex = "robo_forex.cli:main"
+robo-hft = "hft.cli:main"
+
+[tool.setuptools]
+packages = ["robo_forex", "robo_forex.analysis", "robo_forex.feeds", "hft", "hft.brokers"]

@@ -1,0 +1,183 @@
+symbols:
+- symbol: GBPNZD
+  feed_symbol: GBPNZD=X
+  kind: forex
+  pip: 0.0001
+  digits: 5
+  contract_size: 100000.0
+  currencies:
+  - GBP
+  - NZD
+- symbol: AUDUSD
+  feed_symbol: AUDUSD=X
+  kind: forex
+  pip: 0.0001
+  digits: 5
+  contract_size: 100000.0
+  currencies:
+  - AUD
+  - USD
+- symbol: EURUSD
+  feed_symbol: EURUSD=X
+  kind: forex
+  pip: 0.0001
+  digits: 5
+  contract_size: 100000.0
+  currencies:
+  - EUR
+  - USD
+- symbol: GBPUSD
+  feed_symbol: GBPUSD=X
+  kind: forex
+  pip: 0.0001
+  digits: 5
+  contract_size: 100000.0
+  currencies:
+  - GBP
+  - USD
+- symbol: USDJPY
+  feed_symbol: USDJPY=X
+  kind: forex
+  pip: 0.01
+  digits: 3
+  contract_size: 100000.0
+  currencies:
+  - USD
+  - JPY
+- symbol: GBPJPY
+  feed_symbol: GBPJPY=X
+  kind: forex
+  pip: 0.01
+  digits: 3
+  contract_size: 100000.0
+  currencies:
+  - GBP
+  - JPY
+- symbol: AUDJPY
+  feed_symbol: AUDJPY=X
+  kind: forex
+  pip: 0.01
+  digits: 3
+  contract_size: 100000.0
+  currencies:
+  - AUD
+  - JPY
+- symbol: EURGBP
+  feed_symbol: EURGBP=X
+  kind: forex
+  pip: 0.0001
+  digits: 5
+  contract_size: 100000.0
+  currencies:
+  - EUR
+  - GBP
+- symbol: NZDUSD
+  feed_symbol: NZDUSD=X
+  kind: forex
+  pip: 0.0001
+  digits: 5
+  contract_size: 100000.0
+  currencies:
+  - NZD
+  - USD
+- symbol: USDCAD
+  feed_symbol: USDCAD=X
+  kind: forex
+  pip: 0.0001
+  digits: 5
+  contract_size: 100000.0
+  currencies:
+  - USD
+  - CAD
+feed:
+  provider: yahoo
+  csv_dir: data
+  cache_dir: .cache
+  cache_minutes: 5
+strategy:
+  timeframe: 1h
+  htf_timeframe: 4h
+  lookback: 600
+  htf_lookback: 400
+  atr_period: 14
+  pivot_left: 2
+  pivot_right: 2
+  htf_pivot_left: 2
+  htf_pivot_right: 2
+  use_trendlines: true
+  allow_buy: true
+  allow_sell: true
+  min_score: 55.0
+  max_distance_atr: 3.0
+  require_untested_block: false
+  require_htf_alignment: false
+  require_rejection_candle: false
+  signal_ttl_bars: 12
+  zone:
+    cluster_atr: 0.6
+    min_pivots: 2
+    min_touches: 2
+    min_height_atr: 0.15
+    max_height_atr: 2.0
+    touch_cooldown: 3
+    rejection_atr: 0.7
+    rejection_bars: 8
+    break_close_atr: 0.25
+  order_block:
+    leg_bars: 6
+    displacement_atr: 1.4
+    max_candles: 3
+    require_bos: true
+    extent: body_to_wick
+    max_age: 400
+  trendline:
+    min_touches: 2
+    touch_atr: 0.35
+    violation_atr: 0.5
+    max_violations: 1
+    min_bars_apart: 4
+    max_pivots: 8
+  confluence:
+    require_order_block: true
+    min_overlap_atr: 0.05
+    trendline_tolerance_atr: 0.4
+    weight_zone: 0.45
+    weight_order_block: 0.35
+    weight_trendline: 0.1
+    weight_bias: 0.1
+    zone_only_penalty: 0.75
+risk:
+  account_balance: 10000.0
+  risk_percent: 0.5
+  min_rr: 3.0
+  target_mode: structure_then_rr
+  stop_buffer_atr: 0.25
+  entry_offset_atr: 0.0
+  max_stop_atr: 3.5
+  target_padding_atr: 0.15
+  account_currency: USD
+news:
+  enabled: true
+  provider: faireconomy
+  url: https://nfs.faireconomy.media/ff_calendar_thisweek.json
+  file: ''
+  impacts:
+  - high
+  minutes_before: 60
+  minutes_after: 30
+  fail_open: true
+  cache_minutes: 30
+  timeout: 10.0
+session:
+  enabled: true
+  start_hour_utc: 6
+  end_hour_utc: 20
+  skip_weekend: true
+  friday_cutoff_hour_utc: 19
+output:
+  charts_dir: charts
+  json_out: ''
+  markdown_out: ''
+  draw_charts: false
+  telegram_token: ''
+  telegram_chat_id: ''
