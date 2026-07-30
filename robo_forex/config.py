@@ -94,6 +94,25 @@ class RiskSettings:
 
 
 @dataclass
+class CostSettings:
+    """Custos de transação — sem eles o backtest mente por omissão."""
+
+    spread_pips: float = 1.0  # padrão quando o par não está no mapa abaixo
+    spread_by_symbol: dict[str, float] = field(
+        default_factory=lambda: {
+            "EURUSD": 0.8, "GBPUSD": 1.0, "AUDUSD": 0.9, "NZDUSD": 1.4, "USDCAD": 1.3,
+            "USDJPY": 0.9, "EURGBP": 1.2, "GBPJPY": 2.0, "GBPNZD": 3.5, "AUDJPY": 1.6,
+        }
+    )
+    slippage_pips: float = 0.2  # derrapagem por operação (entrada + saída)
+    commission_per_lot_round_turn: float = 0.0  # conta ECN típica: 7.0
+    enabled: bool = True
+
+    def spread_for(self, symbol: str) -> float:
+        return self.spread_by_symbol.get(symbol.upper(), self.spread_pips)
+
+
+@dataclass
 class NewsSettings:
     enabled: bool = True
     provider: str = "faireconomy"  # faireconomy | file | none
@@ -153,6 +172,7 @@ class Settings:
     feed: FeedSettings = field(default_factory=FeedSettings)
     strategy: StrategySettings = field(default_factory=StrategySettings)
     risk: RiskSettings = field(default_factory=RiskSettings)
+    costs: CostSettings = field(default_factory=CostSettings)
     news: NewsSettings = field(default_factory=NewsSettings)
     session: SessionSettings = field(default_factory=SessionSettings)
     output: OutputSettings = field(default_factory=OutputSettings)
@@ -184,7 +204,7 @@ class Settings:
                 else:
                     specs.append(SymbolSpec(**item))
             settings.symbols = specs
-        for name in ("feed", "strategy", "risk", "news", "session", "output"):
+        for name in ("feed", "strategy", "risk", "costs", "news", "session", "output"):
             if name in data and data[name]:
                 _apply(getattr(settings, name), data[name])
         return settings
@@ -195,6 +215,7 @@ class Settings:
             "feed": asdict(self.feed),
             "strategy": asdict(self.strategy),
             "risk": asdict(self.risk),
+            "costs": asdict(self.costs),
             "news": asdict(self.news),
             "session": asdict(self.session),
             "output": asdict(self.output),

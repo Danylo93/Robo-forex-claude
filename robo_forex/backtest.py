@@ -11,9 +11,10 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from datetime import datetime
 
-from .config import Settings, SymbolSpec
+from .config import CostSettings, Settings, SymbolSpec
 from .feeds.base import resample, timeframe_minutes
 from .models import Candle, Side, Signal
+from .risk import pip_value_per_lot
 from .strategy import Strategy
 
 
@@ -30,7 +31,9 @@ class Trade:
     filled_ts: datetime | None = None
     exit_ts: datetime | None = None
     exit_price: float = 0.0
-    result_r: float = 0.0
+    gross_r: float = 0.0  # resultado antes dos custos
+    cost_r: float = 0.0  # spread + derrapagem + comissão, em múltiplos do risco
+    result_r: float = 0.0  # líquido = bruto - custo
     outcome: str = "pendente"  # alvo | stop | expirada | aberta
 
     def to_dict(self) -> dict:
@@ -45,7 +48,9 @@ class Trade:
             "target": self.target,
             "rr_planned": round(self.rr_planned, 2),
             "outcome": self.outcome,
-            "result_r": round(self.result_r, 2),
+            "gross_r": round(self.gross_r, 3),
+            "cost_r": round(self.cost_r, 3),
+            "result_r": round(self.result_r, 3),
             "score": round(self.score, 1),
         }
 
@@ -75,6 +80,14 @@ class BacktestReport:
         return sum(t.result_r for t in self.closed)
 
     @property
+    def gross_r(self) -> float:
+        return sum(t.gross_r for t in self.closed)
+
+    @property
+    def cost_r(self) -> float:
+        return sum(t.cost_r for t in self.closed)
+
+    @property
     def expectancy_r(self) -> float:
         return self.total_r / len(self.closed) if self.closed else 0.0
 
@@ -99,7 +112,8 @@ class BacktestReport:
         return (
             f"{self.symbol} {self.timeframe} | barras {self.bars} | sinais {self.signals} | "
             f"operações {len(self.closed)} | acerto {self.win_rate:.0f}% | "
-            f"resultado {self.total_r:+.1f}R | expectativa {self.expectancy_r:+.2f}R/op | "
+            f"resultado {self.total_r:+.1f}R (bruto {self.gross_r:+.1f}R, custos "
+            f"{-self.cost_r:+.1f}R) | expectativa {self.expectancy_r:+.2f}R/op | "
             f"fator de lucro {self.profit_factor:.2f} | pior sequência {self.max_drawdown_r:.1f}R"
         )
 
@@ -113,6 +127,8 @@ class BacktestReport:
             "stats": {
                 "closed": len(self.closed),
                 "win_rate": round(self.win_rate, 1),
+                "gross_r": round(self.gross_r, 2),
+                "cost_r": round(self.cost_r, 2),
                 "total_r": round(self.total_r, 2),
                 "expectancy_r": round(self.expectancy_r, 3),
                 "profit_factor": (
@@ -182,12 +198,33 @@ def run_backtest(
             continue
         report.signals += 1
         trade = _trade_from_signal(signal, spec)
+        trade.cost_r = cost_in_r(signal, spec, settings.costs)
         report.trades.append(trade)
         pending = (trade, i + cfg.signal_ttl_bars)
 
     if open_trade and open_trade.outcome == "aberta":
         open_trade.result_r = 0.0
     return report
+
+
+def cost_in_r(signal: Signal, spec: SymbolSpec, costs: CostSettings) -> float:
+    """Custo do round-turn convertido em múltiplos do risco da operação.
+
+    O stop define 1R; o custo é medido na mesma régua. Ex.: stop de 40 pips com
+    spread de 1 pip e derrapagem de 0,2 custa 0,03R — parece pouco, mas em 175
+    operações vira um terço do resultado.
+    """
+    if not costs.enabled:
+        return 0.0
+    stop_pips = abs(signal.entry - signal.stop) / spec.pip if spec.pip else 0.0
+    if stop_pips <= 0:
+        return 0.0
+    cost_pips = costs.spread_for(spec.symbol) + costs.slippage_pips
+    if costs.commission_per_lot_round_turn:
+        pip_value, _ = pip_value_per_lot(spec, signal.entry, "USD")
+        if pip_value > 0:
+            cost_pips += costs.commission_per_lot_round_turn / pip_value
+    return cost_pips / stop_pips
 
 
 def _trade_from_signal(signal: Signal, spec: SymbolSpec) -> Trade:
@@ -210,7 +247,8 @@ def _update_open(
     risk = abs(trade.entry - trade.stop)
     if risk <= 0:
         trade.outcome = "stop"
-        trade.result_r = -1.0
+        trade.gross_r = -1.0
+        trade.result_r = -1.0 - trade.cost_r
         return
     hit_stop = bar.high >= trade.stop if trade.side is Side.SELL else bar.low <= trade.stop
     hit_target = bar.low <= trade.target if trade.side is Side.SELL else bar.high >= trade.target
@@ -218,13 +256,15 @@ def _update_open(
         trade.outcome = "stop"
         trade.exit_price = trade.stop
         trade.exit_ts = bar.ts
-        trade.result_r = -1.0
+        trade.gross_r = -1.0
+        trade.result_r = trade.gross_r - trade.cost_r
         return
     if hit_target:
         trade.outcome = "alvo"
         trade.exit_price = trade.target
         trade.exit_ts = bar.ts
-        trade.result_r = abs(trade.target - trade.entry) / risk
+        trade.gross_r = abs(trade.target - trade.entry) / risk
+        trade.result_r = trade.gross_r - trade.cost_r
         return
     entry_index = getattr(trade, "_entry_bar", index)
     if not entry_bar and index - entry_index >= max_hold_bars:
@@ -234,7 +274,8 @@ def _update_open(
         signed = (
             (trade.entry - bar.close) if trade.side is Side.SELL else (bar.close - trade.entry)
         )
-        trade.result_r = signed / risk
+        trade.gross_r = signed / risk
+        trade.result_r = trade.gross_r - trade.cost_r
         trade.outcome = "alvo" if trade.result_r > 0 else "stop"
 
 

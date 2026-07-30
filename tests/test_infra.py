@@ -276,6 +276,86 @@ class BacktestTests(unittest.TestCase):
         self.assertEqual(report.max_drawdown_r, 0.0)
 
 
+class BacktestCostTests(unittest.TestCase):
+    """O custo de transação precisa aparecer no resultado, senão o backtest mente."""
+
+    def signal(self, entry=1.1000, stop=1.1040, symbol="EURUSD"):
+        from robo_forex.models import Side, Signal
+
+        return Signal(
+            symbol=symbol, timeframe="1h", side=Side.SELL, entry=entry, stop=stop,
+            target=entry - 3 * abs(entry - stop), rr=3.0, score=70.0, ts=NOW,
+        )
+
+    def test_cost_is_measured_in_r(self):
+        from robo_forex.backtest import cost_in_r
+        from robo_forex.config import CostSettings, SymbolSpec
+
+        costs = CostSettings(slippage_pips=0.2, commission_per_lot_round_turn=0.0)
+        # stop de 40 pips, spread 0,8 + derrapagem 0,2 = 1,0 pip -> 0,025R
+        cost = cost_in_r(self.signal(), SymbolSpec("EURUSD"), costs)
+        self.assertAlmostEqual(cost, 1.0 / 40.0)
+
+    def test_tighter_stop_pays_proportionally_more(self):
+        from robo_forex.backtest import cost_in_r
+        from robo_forex.config import CostSettings, SymbolSpec
+
+        costs = CostSettings()
+        wide = cost_in_r(self.signal(stop=1.1040), SymbolSpec("EURUSD"), costs)
+        tight = cost_in_r(self.signal(stop=1.1010), SymbolSpec("EURUSD"), costs)
+        self.assertAlmostEqual(tight, wide * 4, places=6)
+
+    def test_commission_increases_cost(self):
+        from robo_forex.backtest import cost_in_r
+        from robo_forex.config import CostSettings, SymbolSpec
+
+        spec = SymbolSpec("EURUSD")
+        without = cost_in_r(self.signal(), spec, CostSettings())
+        with_commission = cost_in_r(
+            self.signal(), spec, CostSettings(commission_per_lot_round_turn=7.0)
+        )
+        self.assertGreater(with_commission, without)
+        self.assertAlmostEqual(with_commission - without, 0.7 / 40.0, places=6)
+
+    def test_disabled_costs_are_zero(self):
+        from robo_forex.backtest import cost_in_r
+        from robo_forex.config import CostSettings, SymbolSpec
+
+        self.assertEqual(
+            cost_in_r(self.signal(), SymbolSpec("EURUSD"), CostSettings(enabled=False)), 0.0
+        )
+
+    def test_spread_by_symbol_is_used(self):
+        from robo_forex.backtest import cost_in_r
+        from robo_forex.config import CostSettings, SymbolSpec
+
+        costs = CostSettings()
+        eur = cost_in_r(self.signal(symbol="EURUSD"), SymbolSpec("EURUSD"), costs)
+        gbpnzd = cost_in_r(
+            self.signal(entry=2.2900, stop=2.2940, symbol="GBPNZD"), SymbolSpec("GBPNZD"), costs
+        )
+        self.assertGreater(gbpnzd, eur)  # GBPNZD tem spread muito maior
+
+    def test_net_result_is_gross_minus_cost(self):
+        settings = offline_settings()
+        report = run_backtest(
+            settings, SymbolSpec("GBPNZD"), long_series(8), warmup=120, step=2, max_hold_bars=80
+        )
+        self.assertTrue(report.closed)
+        for trade in report.closed:
+            self.assertAlmostEqual(trade.result_r, trade.gross_r - trade.cost_r, places=9)
+        self.assertGreater(report.cost_r, 0)
+        self.assertAlmostEqual(report.total_r, report.gross_r - report.cost_r, places=6)
+
+    def test_summary_shows_cost_breakdown(self):
+        settings = offline_settings()
+        report = run_backtest(
+            settings, SymbolSpec("GBPNZD"), long_series(8), warmup=120, step=2, max_hold_bars=80
+        )
+        self.assertIn("custos", report.summary())
+        self.assertIn("cost_r", report.to_dict()["stats"])
+
+
 class CliTests(unittest.TestCase):
     def run_cli(self, argv):
         buffer = io.StringIO()
