@@ -1,0 +1,58 @@
+instrument:
+  symbol: EURUSD
+  broker_symbol: EURUSD
+  pip: 0.0001
+  digits: 5
+  contract_size: 100000.0
+  pip_value_per_lot: 10.0
+  min_lots: 0.01
+  lot_step: 0.01
+  max_lots: 5.0
+costs:
+  commission_per_lot_per_side: 3.5
+  extra_slippage_pips: 0.1
+  latency_ms: 60.0
+  swap_per_lot_per_day: 0.0
+  spread_markup_pips: 0.0
+strategy:
+  name: mean_reversion
+  window_ticks: 120
+  warmup_ticks: 200
+  entry_z: 2.2
+  exit_z: 0.3
+  imbalance_threshold: 0.35
+  momentum_bps: 0.8
+  take_profit_pips: 1.2
+  stop_pips: 2.4
+  max_hold_seconds: 90.0
+  min_edge_multiple: 1.5
+  cooldown_seconds: 5.0
+risk:
+  account_balance: 1000.0
+  risk_percent_per_trade: 0.25
+  fixed_lots: 0.0
+  max_spread_pips: 1.0
+  max_daily_loss_percent: 2.0
+  max_drawdown_percent: 5.0
+  max_consecutive_losses: 5
+  max_trades_per_hour: 60
+  max_trades_per_day: 300
+  max_open_positions: 1
+  session_start_hour_utc: 7
+  session_end_hour_utc: 20
+  skip_weekend: true
+  news_blackout: true
+  news_minutes_before: 15
+  news_minutes_after: 15
+broker:
+  provider: paper
+  mode: demo
+  account_id: ''
+  token_env: OANDA_TOKEN
+  oanda_host: ''
+  poll_ms: 200.0
+  mt5_login: 0
+  mt5_server: ''
+  mt5_password_env: MT5_PASSWORD
+  magic: 987001
+log_file: ''
