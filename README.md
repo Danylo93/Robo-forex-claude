@@ -116,6 +116,25 @@ adaptadores de corretora, gestão de risco com kill-switch e simulador realista
 de custos. Leia [docs/HFT.md](docs/HFT.md) — inclusive a parte sobre o que é e o
 que **não** é possível para uma conta retail.
 
+```bash
+python3 -m hft validate --spreads 0.0,0.2,0.4,0.6,1.0   # onde deixa de pagar os custos
+python3 -m hft backtest --ticks-csv data/EURUSD_ticks.csv
+python3 -m hft paper --seconds 600 -v                    # preços reais, ordens simuladas
+```
+
+### Camada institucional
+
+Para quem vai além da corretora retail, o mesmo pacote traz FIX 4.4, livro L2,
+market making com controle de inventário e medição de latência tick-to-trade:
+
+```bash
+python3 -m hft mm --count 20000 --rebate 2.5   # market making + seleção adversa
+python3 -m hft latency --count 50000           # p50/p99/p99.9 do caminho crítico
+```
+
+[docs/HFT_INSTITUCIONAL.md](docs/HFT_INSTITUCIONAL.md) separa o que é código
+(entregue) do que é colocation, membership e licença de dados (não é código).
+
 ## Testes
 
 ```bash
@@ -134,6 +153,17 @@ robo_forex/
   backtest.py   validação barra a barra
   plot.py       gráfico SVG
   cli.py        linha de comando
+
+hft/
+  engine.py     tick -> features -> estratégia -> risco -> corretora
+  strategies.py mean_reversion e imbalance_momentum
+  risk.py       kill-switch, limites diários e trava de vantagem
+  brokers/      paper, OANDA (REST) e MetaTrader 5
+  fix/          FIX 4.4: mensagens, sessão, market data e ordens
+  orderbook.py  livro L2 com microprice e custo de varredura
+  marketmaker.py cotação de dois lados com controle de inventário
+  latency.py    histogramas p50/p99/p99.9 por estágio
+  lowlat.py     ring buffer, pool, controle de GC e afinidade de CPU
 ```
 
 ## Aviso

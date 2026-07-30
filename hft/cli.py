@@ -65,6 +65,27 @@ def build_parser() -> argparse.ArgumentParser:
         help="obrigatório para operar com dinheiro real (broker.mode=live)",
     )
 
+    mm = sub.add_parser(
+        "mm", parents=[common], help="market making: simula cotação de dois lados"
+    )
+    mm.add_argument("--count", type=int, default=40_000, help="ticks sintéticos")
+    mm.add_argument("--ticks-csv", help="arquivo CSV de ticks")
+    mm.add_argument("--tick-spread", type=float, default=0.6)
+    mm.add_argument("--seed", type=int, default=9)
+    mm.add_argument("--half-spread", type=float, default=0.4, help="meia-distância base em pips")
+    mm.add_argument("--quote-size", type=float, default=0.1, help="lotes por cotação")
+    mm.add_argument("--max-inventory", type=float, default=0.5, help="estoque máximo em lotes")
+    mm.add_argument("--rebate", type=float, default=0.0, help="rebate de maker por lote")
+    mm.add_argument("--fee", type=float, default=0.0, help="taxa de maker por lote")
+    mm.add_argument("--max-loss", type=float, default=0.0, help="perda que interrompe a sessão")
+
+    lat = sub.add_parser(
+        "latency", parents=[common], help="mede a latência do caminho crítico"
+    )
+    lat.add_argument("--count", type=int, default=50_000, help="ticks processados")
+    lat.add_argument("--no-gc-tuning", action="store_true", help="não desliga o coletor de lixo")
+    lat.add_argument("--cpu", type=int, help="fixa o processo neste núcleo")
+
     init = sub.add_parser("init-config", parents=[common], help="grava configuração de exemplo")
     init.add_argument("--out", default="config/hft.yaml")
     return parser
@@ -262,6 +283,78 @@ def cmd_live(settings: HftSettings, args) -> int:
     return 0
 
 
+def cmd_market_making(settings: HftSettings, args) -> int:
+    """Simula o market maker: cotação de dois lados, estoque e seleção adversa."""
+    from .marketmaker import MarketMaker, MarketMakerParams, QuotingEngine, render_maker_report
+
+    if opt(args, "ticks_csv"):
+        ticks = read_tick_csv(args.ticks_csv)
+    else:
+        ticks = synthetic_ticks(
+            count=args.count,
+            pip=settings.instrument.pip,
+            spread_pips=args.tick_spread,
+            seed=args.seed,
+        )
+        print(
+            f"* ticks sintéticos ({len(ticks)}) — o simulador executa a cotação apenas quando "
+            "o preço a atravessa, que é o pior caso realista\n"
+        )
+    params = MarketMakerParams(
+        base_half_spread_pips=args.half_spread,
+        quote_size_lots=args.quote_size,
+        max_inventory_lots=args.max_inventory,
+        rebate_per_lot=args.rebate,
+        fee_per_lot=args.fee,
+    )
+    engine = QuotingEngine(
+        settings,
+        MarketMaker(settings, params),
+        params,
+        max_loss=args.max_loss or None,
+    )
+    report = engine.run(ticks)
+    print(render_maker_report(report, settings))
+    _write_json(report, args)
+    return 0
+
+
+def cmd_latency(settings: HftSettings, args) -> int:
+    """Mede o caminho crítico do motor com o runtime de baixa latência ligado."""
+    from .brokers.paper import PaperBroker
+    from .latency import LatencyTracker
+    from .lowlat import TradingRuntime
+
+    tracker = LatencyTracker()
+    engine = Engine(settings, PaperBroker(settings), build_strategy(settings))
+    ticks = synthetic_ticks(count=args.count, pip=settings.instrument.pip, seed=5)
+
+    runtime = TradingRuntime(
+        disable_gc=not opt(args, "no_gc_tuning", False), cpu=opt(args, "cpu")
+    )
+    with runtime:
+        for note in runtime.notes:
+            print(f"* {note}")
+        for tick in ticks:
+            started = tracker.start("tick_to_trade")
+            engine.on_tick(tick)
+            tracker.stop("tick_to_trade", started)
+
+    print(f"\n{len(ticks)} ticks processados\n")
+    print(tracker.report())
+    print(
+        "\nA cauda (p99.9 e máximo) é o que importa: picos vêm do coletor de lixo e do "
+        "\nagendador do sistema. Em Python o piso realista é dezenas de µs — para competir "
+        "\nem µs o caminho crítico precisa ser C++/Rust (docs/HFT_INSTITUCIONAL.md)."
+    )
+    if opt(args, "json_out"):
+        Path(args.json_out).write_text(
+            json.dumps(tracker.to_dict(), indent=2, ensure_ascii=False), encoding="utf-8"
+        )
+        print(f"relatório gravado: {args.json_out}")
+    return 0
+
+
 def cmd_init_config(settings: HftSettings, args) -> int:
     path = Path(args.out)
     path.parent.mkdir(parents=True, exist_ok=True)
@@ -301,6 +394,8 @@ def main(argv: list[str] | None = None) -> int:
     handlers = {
         "backtest": cmd_backtest,
         "validate": cmd_validate,
+        "mm": cmd_market_making,
+        "latency": cmd_latency,
         "paper": cmd_paper,
         "live": cmd_live,
         "init-config": cmd_init_config,

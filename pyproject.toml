@@ -21,4 +21,11 @@ robo-forex = "robo_forex.cli:main"
 robo-hft = "hft.cli:main"
 
 [tool.setuptools]
-packages = ["robo_forex", "robo_forex.analysis", "robo_forex.feeds", "hft", "hft.brokers"]
+packages = [
+    "robo_forex",
+    "robo_forex.analysis",
+    "robo_forex.feeds",
+    "hft",
+    "hft.brokers",
+    "hft.fix",
+]
