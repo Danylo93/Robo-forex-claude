@@ -21,6 +21,11 @@ GBPNZD | 1h | VENDA 📉  (nota 68)
     • Alvo: fundo anterior em 2.26843
 ```
 
+> **Leia antes de operar:** em 2 anos de dados reais e 2.132 operações, esta
+> estratégia terminou **negativa** (US$ 1.000 → US$ 155 arriscando 1% por
+> operação). O diagnóstico completo está em [docs/RESULTADOS.md](docs/RESULTADOS.md).
+> A ferramenta funciona; a vantagem é que não apareceu.
+
 ## Uso rápido
 
 ```bash
