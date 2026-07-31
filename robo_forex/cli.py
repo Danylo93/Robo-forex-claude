@@ -41,6 +41,14 @@ def build_parser() -> argparse.ArgumentParser:
     back.add_argument("--warmup", type=int, default=250, help="barras de aquecimento")
     back.add_argument("--step", type=int, default=1, help="reavaliar a cada N barras")
     back.add_argument("--out", help="salva o relatório em JSON")
+    back.add_argument(
+        "--oos",
+        type=float,
+        default=0.0,
+        metavar="PCT",
+        help="valida fora da amostra: usa PCT%% do histórico para desenvolver e o "
+        "restante, nunca visto, para conferir (ex.: 60)",
+    )
 
     cal = sub.add_parser("calendar", parents=[common], help="mostra os eventos econômicos")
     cal.add_argument("--hours", type=int, default=48, help="horizonte em horas")
@@ -163,7 +171,8 @@ def cmd_backtest(settings: Settings, args: argparse.Namespace) -> int:
     feed = build_feed(settings.feed)
     symbols = symbols_from(args)
     specs = [settings.spec(s) for s in symbols] if symbols else list(settings.symbols)
-    reports = []
+    reports: list = []
+    in_sample: list = []
     for spec in specs:
         try:
             candles = drop_unclosed(
@@ -173,17 +182,44 @@ def cmd_backtest(settings: Settings, args: argparse.Namespace) -> int:
         except Exception as exc:
             print(f"{spec.symbol}: falha ao obter dados ({exc})")
             continue
+        oos = opt(args, "oos") or 0.0
+        if oos:
+            corte = int(len(candles) * oos / 100.0)
+            dentro = run_backtest(
+                settings, spec, candles[:corte], warmup=args.warmup, step=args.step
+            )
+            fora = run_backtest(
+                settings, spec, candles[corte:], warmup=args.warmup, step=args.step
+            )
+            reports.append(fora)  # o total considera só o que é fora da amostra
+            in_sample.append(dentro)
+            print(f"  [dentro da amostra] {dentro.summary()}")
+            print(f"  [FORA da amostra  ] {fora.summary()}")
+            continue
         report = run_backtest(settings, spec, candles, warmup=args.warmup, step=args.step)
         reports.append(report)
         print(report.summary())
+    if in_sample:
+        fechadas = [t for r in in_sample for t in r.closed]
+        total = sum(t.result_r for t in fechadas)
+        print(
+            f"\nDENTRO DA AMOSTRA: {len(fechadas)} operações | resultado {total:+.1f}R"
+        )
     if reports:
         closed = [t for r in reports for t in r.closed]
         total = sum(t.result_r for t in closed)
         wins = len([t for t in closed if t.result_r > 0])
+        rotulo = "FORA DA AMOSTRA (o que vale)" if in_sample else "TOTAL"
         print(
-            f"\nTOTAL: {len(closed)} operações | acerto "
+            f"\n{rotulo}: {len(closed)} operações | acerto "
             f"{(100.0 * wins / len(closed) if closed else 0):.0f}% | resultado {total:+.1f}R"
         )
+        if in_sample:
+            print(
+                "  Só o resultado fora da amostra conta: o de dentro é onde a ideia foi "
+                "escolhida,\n  e escolher no mesmo dado em que se testa é a forma clássica "
+                "de se enganar."
+            )
     if args.out and reports:
         path = Path(args.out)
         path.parent.mkdir(parents=True, exist_ok=True)

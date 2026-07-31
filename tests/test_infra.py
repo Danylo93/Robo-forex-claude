@@ -403,6 +403,26 @@ class CliTests(unittest.TestCase):
         self.assertEqual(code, 0)
         self.assertIn("GBPNZD", out)
 
+    def test_backtest_out_of_sample_split(self):
+        """--oos separa o trecho onde a ideia é escolhida do trecho que a confere."""
+        code, out = self.run_cli(
+            ["backtest", "--provider", "synthetic", "-s", "GBPNZD", "--bars", "600",
+             "--warmup", "120", "--step", "5", "--oos", "60", "--no-news", "--no-session"]
+        )
+        self.assertEqual(code, 0)
+        self.assertIn("dentro da amostra", out)
+        self.assertIn("FORA da amostra", out)
+        self.assertIn("FORA DA AMOSTRA (o que vale)", out)
+
+    def test_backtest_without_oos_shows_single_total(self):
+        code, out = self.run_cli(
+            ["backtest", "--provider", "synthetic", "-s", "GBPNZD", "--bars", "400",
+             "--warmup", "150", "--step", "5", "--no-news", "--no-session"]
+        )
+        self.assertEqual(code, 0)
+        self.assertIn("TOTAL:", out)
+        self.assertNotIn("FORA DA AMOSTRA", out)
+
     def test_invalid_config_returns_error_code(self):
         code, _ = self.run_cli(["-c", "/tmp/nao-existe.json", "scan"])
         self.assertEqual(code, 2)
