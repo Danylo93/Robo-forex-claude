@@ -7,7 +7,8 @@ que você pode repetir.
 ## Resumo em uma linha
 
 **A estratégia de linha de oferta/demanda + order block, como está implementada
-aqui, não demonstrou vantagem em 2 anos de dados. Não opere com dinheiro real.**
+aqui, não demonstrou vantagem em 2 anos de dados. Nem ela, nem as três variações
+testadas para consertá-la. Não opere com dinheiro real.**
 
 ## O que foi testado
 
@@ -65,6 +66,38 @@ hipótese de que "era só o custo": **não havia vantagem escondida sob os custo
   backtest é conservador (stop na frente do alvo em empate, sem look-ahead).
   O que faltou foi vantagem na estratégia, não corretude no software.
 
+## As três tentativas de conserto — todas reprovadas
+
+As hipóteses listadas abaixo foram testadas **uma vez cada**, com separação
+dentro/fora da amostra (`--oos 60`): os primeiros 60% do histórico para ajustar,
+os 40% finais — nunca vistos por aquela configuração — para conferir. Só o
+resultado de fora conta.
+
+| Configuração | Operações | Acerto | Resultado | Por operação |
+| --- | --- | --- | --- | --- |
+| Linha de base (alvo 3:1+) | 833 | 20% | −95,8R | −0,115R |
+| **H1 · alvo mais perto (1,5:1)** | 1.205 | **43%** | **−34,2R** | **−0,028R** |
+| H2 · muito mais seletivo | 79 | 16% | −27,6R | −0,349R |
+| H3 · vela de rejeição | 353 | 20% | −38,3R | −0,108R |
+
+Cada uma falhou de um jeito diferente, e as três juntas fecham o diagnóstico:
+
+**H1 (alvo mais perto) foi a única a produzir vantagem mensurável.** Com alvo em
+1,5:1 o ponto de equilíbrio é 40% de acerto e o robô entregou 43% — cerca de
++0,075R de vantagem bruta por operação. O custo de transação é ~0,10R por
+operação. **A vantagem existe e é menor que o pedágio.** Foi a melhor
+configuração de todas (perda 4× menor por operação que a base), e ainda assim
+negativa.
+
+**H3 (vela de rejeição) cortou metade das operações e manteve os mesmos 20% de
+acerto.** As operações eliminadas eram estatisticamente iguais às mantidas: o
+filtro não distingue nada.
+
+**H2 (seletividade extrema) é o exemplo didático de sobreajuste**: +7,7R dentro
+da amostra, −27,6R fora. Sem a separação `--oos`, esta configuração teria sido
+declarada "a solução" — e perderia dinheiro em conta real. É exatamente para
+pegar esse erro que o `--oos` existe.
+
 ## O que seria honesto tentar a seguir
 
 Cada item é uma **hipótese com razão a priori**, não pesca de parâmetro:
@@ -81,9 +114,16 @@ Cada item é uma **hipótese com razão a priori**, não pesca de parâmetro:
    e não foi usada nestes testes.
 
 **Regra para não se enganar:** teste cada hipótese **uma vez**, em dados
-separados dos que você usou para formular a ideia. Se você testar vinte
-variações e escolher a melhor, encontrou o passado, não uma vantagem. Uma
+separados dos que você usou para formular a ideia (`--oos 60`). Se você testar
+vinte variações e escolher a melhor, encontrou o passado, não uma vantagem. Uma
 variação positiva depois de vinte tentativas é o resultado esperado do acaso.
+
+As três hipóteses acima foram testadas e reprovadas. **Este documento não será
+atualizado com uma quarta, quinta e sexta tentativa até alguma dar positivo** —
+seria justamente a pesca que a regra proíbe. O caminho honesto a partir daqui
+não é ajustar parâmetro: é procurar um sinal de entrada com poder de previsão
+real, medido antes de virar estratégia. As zonas e os order blocks, medidos,
+não têm esse poder.
 
 ## Como repetir
 
